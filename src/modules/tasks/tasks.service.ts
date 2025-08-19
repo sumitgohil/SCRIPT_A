@@ -51,10 +51,11 @@ export class TasksService {
   }
 
   async findAll(): Promise<Task[]> {
-    // Inefficient implementation: retrieves all tasks without pagination
-    // and loads all relations, causing potential performance issues
+    // Optimized: Add pagination and limit to prevent memory issues
     return this.tasksRepository.find({
       relations: ['user'],
+      take: 100, // Limit to prevent excessive memory usage
+      order: { createdAt: 'DESC' },
     });
   }
 
@@ -62,33 +63,25 @@ export class TasksService {
     filterDto: TaskQueryDto,
     paginationDto: TaskQueryDto,
   ): Promise<PaginatedResponse<Task>> {
-    const queryBuilder = this.tasksRepository.createQueryBuilder('task');
-
-    // Apply filters
-    this.applyFilters(queryBuilder, filterDto);
-
-    // Apply pagination
+    // Optimized: Use single query builder and execute count and data in parallel
     const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'DESC' } = paginationDto;
     const skip = (page - 1) * limit;
 
-    // Apply sorting
-    queryBuilder.orderBy(`task.${sortBy}`, sortOrder);
+    // Create base query builder for both count and data
+    const baseQueryBuilder = this.tasksRepository.createQueryBuilder('task');
+    this.applyFilters(baseQueryBuilder, filterDto);
 
-    // Apply pagination
-    queryBuilder.skip(skip).take(limit);
-
-    // Include user relation if requested
-    if (paginationDto.includeUser !== false) {
-      queryBuilder.leftJoinAndSelect('task.user', 'user');
-    }
-
-    // Get total count for pagination
-    const totalQueryBuilder = this.tasksRepository.createQueryBuilder('task');
-    this.applyFilters(totalQueryBuilder, filterDto);
-    const total = await totalQueryBuilder.getCount();
-
-    // Execute query
-    const tasks = await queryBuilder.getMany();
+    // Execute count and data queries in parallel for better performance
+    const [total, tasks] = await Promise.all([
+      baseQueryBuilder.getCount(),
+      baseQueryBuilder
+        .clone()
+        .orderBy(`task.${sortBy}`, sortOrder)
+        .skip(skip)
+        .take(limit)
+        .leftJoinAndSelect('task.user', 'user')
+        .getMany(),
+    ]);
 
     // Calculate pagination metadata
     const totalPages = Math.ceil(total / limit);
@@ -320,11 +313,143 @@ export class TasksService {
     });
   }
 
+  async searchTasks(searchTerm: string, limit: number = 20): Promise<Task[]> {
+    // Optimized: Efficient search with proper indexing considerations
+    return this.tasksRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.user', 'user')
+      .where('task.title ILIKE :searchTerm', { searchTerm: `%${searchTerm}%` })
+      .orWhere('task.description ILIKE :searchTerm', { searchTerm: `%${searchTerm}%` })
+      .orderBy('task.createdAt', 'DESC')
+      .take(limit)
+      .getMany();
+  }
+
+  async getTasksByUser(userId: string, page: number = 1, limit: number = 10): Promise<PaginatedResponse<Task>> {
+    // Optimized: Get tasks by user with proper pagination
+    const skip = (page - 1) * limit;
+
+    const [total, tasks] = await Promise.all([
+      this.tasksRepository.count({ where: { userId } }),
+      this.tasksRepository.find({
+        where: { userId },
+        relations: ['user'],
+        order: { createdAt: 'DESC' },
+        skip,
+        take: limit,
+      }),
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: tasks,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    };
+  }
+
+  async getOverdueTasks(limit: number = 50): Promise<Task[]> {
+    // Optimized: Get overdue tasks efficiently with proper indexing
+    return this.tasksRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.user', 'user')
+      .where('task.dueDate < :now', { now: new Date() })
+      .andWhere('task.status != :completedStatus', { completedStatus: TaskStatus.COMPLETED })
+      .orderBy('task.dueDate', 'ASC')
+      .take(limit)
+      .getMany();
+  }
+
+  async getTaskStatisticsByUser(userId: string): Promise<any> {
+    // Optimized: Get task statistics for a specific user
+    const statistics = await this.tasksRepository
+      .createQueryBuilder('task')
+      .select([
+        'COUNT(*) as total',
+        'SUM(CASE WHEN task.status = :completedStatus THEN 1 ELSE 0 END) as completed',
+        'SUM(CASE WHEN task.status = :inProgressStatus THEN 1 ELSE 0 END) as inProgress',
+        'SUM(CASE WHEN task.status = :pendingStatus THEN 1 ELSE 0 END) as pending',
+        'SUM(CASE WHEN task.dueDate < :now AND task.status != :completedStatus THEN 1 ELSE 0 END) as overdue',
+      ])
+      .where('task.userId = :userId', { userId })
+      .setParameters({
+        completedStatus: TaskStatus.COMPLETED,
+        inProgressStatus: TaskStatus.IN_PROGRESS,
+        pendingStatus: TaskStatus.PENDING,
+        now: new Date(),
+      })
+      .getRawOne();
+
+    return {
+      total: parseInt(statistics.total),
+      completed: parseInt(statistics.completed),
+      inProgress: parseInt(statistics.inProgress),
+      pending: parseInt(statistics.pending),
+      overdue: parseInt(statistics.overdue),
+    };
+  }
+
   async updateStatus(id: string, status: string): Promise<Task> {
-    // This method will be called by the task processor
-    const task = await this.findOne(id);
-    task.status = status as any;
-    return this.tasksRepository.save(task);
+    // Optimized: Use transaction for status updates to ensure consistency
+    const queryRunner = this.tasksRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const task = await queryRunner.manager.findOne(Task, {
+        where: { id },
+        relations: ['user'],
+      });
+
+      if (!task) {
+        throw new NotFoundException(`Task with ID ${id} not found`);
+      }
+
+      task.status = status as TaskStatus;
+      task.updatedAt = new Date();
+
+      const updatedTask = await queryRunner.manager.save(Task, task);
+      await queryRunner.commitTransaction();
+      
+      return updatedTask;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async bulkUpdateStatus(taskIds: string[], status: TaskStatus): Promise<{ success: boolean; affectedRows: number }> {
+    // Optimized: Bulk status update for better performance
+    const queryRunner = this.tasksRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const result = await queryRunner.manager
+        .createQueryBuilder()
+        .update(Task)
+        .set({
+          status,
+          updatedAt: new Date(),
+        })
+        .whereInIds(taskIds)
+        .execute();
+
+      await queryRunner.commitTransaction();
+      return { success: true, affectedRows: result.affected || 0 };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async batchProcess(operations: { tasks: string[]; action: string }): Promise<any[]> {
