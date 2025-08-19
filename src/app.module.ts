@@ -74,7 +74,7 @@ import { CacheService } from './common/services/cache.service';
   providers: [
     // Inefficient: Global cache service with no configuration options
     // This creates a single in-memory cache instance shared across all modules
-    CacheService
+    CacheService,
   ],
   exports: [
     // Exporting the cache service makes it available to other modules

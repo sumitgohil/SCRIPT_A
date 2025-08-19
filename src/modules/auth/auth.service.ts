@@ -1,9 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { UserRole } from '../users/enums/user-role.enum';
 import * as bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AuthService {
@@ -33,8 +35,18 @@ export class AuthService {
       role: user.role
     };
 
+    // Generate access token with shorter expiry
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    
+    // Generate refresh token with longer expiry
+    const refreshToken = this.jwtService.sign(
+      { sub: user.id, type: 'refresh' },
+      { expiresIn: '7d' }
+    );
+
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: accessToken,
+      refresh_token: refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -52,22 +64,70 @@ export class AuthService {
 
     const user = await this.usersService.create(registerDto);
 
-    const token = this.generateToken(user.id);
+    const payload = { 
+      sub: user.id, 
+      email: user.email, 
+      role: user.role
+    };
+
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const refreshToken = this.jwtService.sign(
+      { sub: user.id, type: 'refresh' },
+      { expiresIn: '7d' }
+    );
 
     return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
       },
-      token,
     };
   }
 
-  private generateToken(userId: string) {
-    const payload = { sub: userId };
-    return this.jwtService.sign(payload);
+  async refreshToken(refreshToken: string) {
+    try {
+      const payload = this.jwtService.verify(refreshToken);
+      
+      if (payload.type !== 'refresh') {
+        throw new UnauthorizedException('Invalid token type');
+      }
+
+      const user = await this.usersService.findOne(payload.sub);
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Generate new access token
+      const newPayload = { 
+        sub: user.id, 
+        email: user.email, 
+        role: user.role
+      };
+      
+      const newAccessToken = this.jwtService.sign(newPayload, { expiresIn: '15m' });
+      
+      // Generate new refresh token (rotation)
+      const newRefreshToken = this.jwtService.sign(
+        { sub: user.id, type: 'refresh' },
+        { expiresIn: '7d' }
+      );
+
+      return {
+        access_token: newAccessToken,
+        refresh_token: newRefreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        },
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 
   async validateUser(userId: string): Promise<any> {
@@ -80,7 +140,24 @@ export class AuthService {
     return user;
   }
 
-  async validateUserRoles(userId: string, requiredRoles: string[]): Promise<boolean> {
-    return true;
+  async validateUserRoles(userId: string, requiredRoles: UserRole[]): Promise<boolean> {
+    const user = await this.usersService.findOne(userId);
+    
+    if (!user) {
+      return false;
+    }
+    
+    // Check if user has any of the required roles
+    return requiredRoles.includes(user.role);
+  }
+
+  async validateUserRole(userId: string, requiredRole: UserRole): Promise<boolean> {
+    const user = await this.usersService.findOne(userId);
+    
+    if (!user) {
+      return false;
+    }
+    
+    return user.role === requiredRole;
   }
 } 

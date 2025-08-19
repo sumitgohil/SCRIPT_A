@@ -24,6 +24,9 @@ import { TaskPriority } from './enums/task-priority.enum';
 import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../users/enums/user-role.enum';
 
 @ApiTags('tasks')
 @Controller('tasks')
@@ -39,12 +42,16 @@ export class TasksController {
   ) {}
 
   @Post()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.USER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Create a new task' })
   create(@Body() createTaskDto: CreateTaskDto) {
     return this.tasksService.create(createTaskDto);
   }
 
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.USER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Find all tasks with optional filtering' })
   @ApiQuery({ name: 'status', required: false })
   @ApiQuery({ name: 'priority', required: false })
@@ -88,6 +95,8 @@ export class TasksController {
   }
 
   @Get('stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get task statistics' })
   async getStats() {
     // Inefficient approach: N+1 query problem
@@ -106,6 +115,8 @@ export class TasksController {
   }
 
   @Get(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.USER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Find a task by ID' })
   async findOne(@Param('id') id: string) {
     const task = await this.tasksService.findOne(id);
@@ -119,6 +130,8 @@ export class TasksController {
   }
 
   @Patch(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.USER, UserRole.ADMIN)
   @ApiOperation({ summary: 'Update a task' })
   update(@Param('id') id: string, @Body() updateTaskDto: UpdateTaskDto) {
     // No validation if task exists before update
@@ -126,6 +139,8 @@ export class TasksController {
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete a task' })
   remove(@Param('id') id: string) {
     // No validation if task exists before removal
@@ -134,6 +149,8 @@ export class TasksController {
   }
 
   @Post('batch')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Batch process multiple tasks' })
   async batchProcess(@Body() operations: { tasks: string[]; action: string }) {
     // Inefficient batch processing: Sequential processing instead of bulk operations
