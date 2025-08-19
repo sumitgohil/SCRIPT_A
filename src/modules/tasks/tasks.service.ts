@@ -63,15 +63,14 @@ export class TasksService {
     filterDto: TaskQueryDto,
     paginationDto: TaskQueryDto,
   ): Promise<PaginatedResponse<Task>> {
-    // Optimized: Use single query builder and execute count and data in parallel
     const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'DESC' } = paginationDto;
     const skip = (page - 1) * limit;
 
-    // Create base query builder for both count and data
+    // Create base query builder
     const baseQueryBuilder = this.tasksRepository.createQueryBuilder('task');
     this.applyFilters(baseQueryBuilder, filterDto);
 
-    // Execute count and data queries in parallel for better performance
+    // Execute count and data queries
     const [total, tasks] = await Promise.all([
       baseQueryBuilder.getCount(),
       baseQueryBuilder
@@ -83,7 +82,6 @@ export class TasksService {
         .getMany(),
     ]);
 
-    // Calculate pagination metadata
     const totalPages = Math.ceil(total / limit);
 
     return {
@@ -113,70 +111,6 @@ export class TasksService {
     if (filterDto.search) {
       queryBuilder.andWhere('(task.title ILIKE :search OR task.description ILIKE :search)', {
         search: `%${filterDto.search}%`,
-      });
-    }
-
-    if (filterDto.statuses && filterDto.statuses.length > 0) {
-      queryBuilder.andWhere('task.status IN (:...statuses)', { statuses: filterDto.statuses });
-    }
-
-    if (filterDto.priorities && filterDto.priorities.length > 0) {
-      queryBuilder.andWhere('task.priority IN (:...priorities)', {
-        priorities: filterDto.priorities,
-      });
-    }
-
-    if (filterDto.userIds && filterDto.userIds.length > 0) {
-      queryBuilder.andWhere('task.userId IN (:...userIds)', { userIds: filterDto.userIds });
-    }
-
-    // Special date filters
-    if (filterDto.overdue) {
-      queryBuilder.andWhere('task.dueDate < :now AND task.status != :completedStatus', {
-        now: new Date(),
-        completedStatus: TaskStatus.COMPLETED,
-      });
-    }
-
-    if (filterDto.dueToday) {
-      const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      const endOfDay = new Date(
-        today.getFullYear(),
-        today.getMonth(),
-        today.getDate(),
-        23,
-        59,
-        59,
-        999,
-      );
-      queryBuilder.andWhere('task.dueDate BETWEEN :startOfDay AND :endOfDay', {
-        startOfDay,
-        endOfDay,
-      });
-    }
-
-    if (filterDto.dueThisWeek) {
-      const today = new Date();
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - today.getDay());
-      startOfWeek.setHours(0, 0, 0, 0);
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-      queryBuilder.andWhere('task.dueDate BETWEEN :startOfWeek AND :endOfWeek', {
-        startOfWeek,
-        endOfWeek,
-      });
-    }
-
-    if (filterDto.dueThisMonth) {
-      const today = new Date();
-      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-      const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-      queryBuilder.andWhere('task.dueDate BETWEEN :startOfMonth AND :endOfMonth', {
-        startOfMonth,
-        endOfMonth,
       });
     }
   }
@@ -325,7 +259,11 @@ export class TasksService {
       .getMany();
   }
 
-  async getTasksByUser(userId: string, page: number = 1, limit: number = 10): Promise<PaginatedResponse<Task>> {
+  async getTasksByUser(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponse<Task>> {
     // Optimized: Get tasks by user with proper pagination
     const skip = (page - 1) * limit;
 
@@ -415,7 +353,7 @@ export class TasksService {
 
       const updatedTask = await queryRunner.manager.save(Task, task);
       await queryRunner.commitTransaction();
-      
+
       return updatedTask;
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -425,7 +363,10 @@ export class TasksService {
     }
   }
 
-  async bulkUpdateStatus(taskIds: string[], status: TaskStatus): Promise<{ success: boolean; affectedRows: number }> {
+  async bulkUpdateStatus(
+    taskIds: string[],
+    status: TaskStatus,
+  ): Promise<{ success: boolean; affectedRows: number }> {
     // Optimized: Bulk status update for better performance
     const queryRunner = this.tasksRepository.manager.connection.createQueryRunner();
     await queryRunner.connect();
@@ -479,7 +420,7 @@ export class TasksService {
             })
             .whereInIds(taskIds)
             .execute();
-          
+
           results.push({ action: 'complete', success: true, affectedRows: updateResult.affected });
           break;
 
@@ -490,7 +431,7 @@ export class TasksService {
             .from(Task)
             .whereInIds(taskIds)
             .execute();
-          
+
           results.push({ action: 'delete', success: true, affectedRows: deleteResult.affected });
           break;
 
@@ -504,7 +445,7 @@ export class TasksService {
             })
             .whereInIds(taskIds)
             .execute();
-          
+
           results.push({ action: 'archive', success: true, affectedRows: archiveResult.affected });
           break;
       }
@@ -529,7 +470,7 @@ export class TasksService {
     // Note: In a real application, you would validate that the user exists
     // For now, we'll just assign the task
     task.userId = userId;
-    
+
     return this.tasksRepository.save(task);
   }
 }
