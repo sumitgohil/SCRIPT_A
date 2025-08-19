@@ -1,26 +1,7 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsEnum, IsUUID, IsDateString, IsInt, Min, Max, IsArray, ValidateNested } from 'class-validator';
-import { Type, Transform } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString, IsEnum, IsUUID } from 'class-validator';
 import { TaskStatus } from '../enums/task-status.enum';
 import { TaskPriority } from '../enums/task-priority.enum';
-
-export class DateRangeDto {
-  @ApiPropertyOptional({
-    description: 'Start date for filtering tasks (ISO 8601 format)',
-    example: '2025-01-01T00:00:00.000Z',
-  })
-  @IsOptional()
-  @IsDateString()
-  startDate?: string;
-
-  @ApiPropertyOptional({
-    description: 'End date for filtering tasks (ISO 8601 format)',
-    example: '2025-12-31T23:59:59.999Z',
-  })
-  @IsOptional()
-  @IsDateString()
-  endDate?: string;
-}
 
 export class TaskFilterDto {
   @ApiPropertyOptional({
@@ -56,93 +37,4 @@ export class TaskFilterDto {
   @IsOptional()
   @IsString()
   search?: string;
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks by due date range',
-    type: DateRangeDto,
-  })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => DateRangeDto)
-  dueDateRange?: DateRangeDto;
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks by creation date range',
-    type: DateRangeDto,
-  })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => DateRangeDto)
-  createdAtRange?: DateRangeDto;
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks by completion date range',
-    type: DateRangeDto,
-  })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => DateRangeDto)
-  completedAtRange?: DateRangeDto;
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks by multiple statuses',
-    type: [TaskStatus],
-    example: [TaskStatus.PENDING, TaskStatus.IN_PROGRESS],
-  })
-  @IsOptional()
-  @IsArray()
-  @IsEnum(TaskStatus, { each: true })
-  statuses?: TaskStatus[];
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks by multiple priorities',
-    type: [TaskPriority],
-    example: [TaskPriority.HIGH, TaskPriority.MEDIUM],
-  })
-  @IsOptional()
-  @IsArray()
-  @IsEnum(TaskPriority, { each: true })
-  priorities?: TaskPriority[];
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks by multiple user IDs',
-    type: [String],
-    example: ['550e8400-e29b-41d4-a716-446655440000', '550e8400-e29b-41d4-a716-446655440001'],
-  })
-  @IsOptional()
-  @IsArray()
-  @IsUUID(undefined, { each: true })
-  userIds?: string[];
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks that are overdue (due date is in the past)',
-    example: true,
-  })
-  @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
-  overdue?: boolean;
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks that are due today',
-    example: true,
-  })
-  @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
-  dueToday?: boolean;
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks that are due this week',
-    example: true,
-  })
-  @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
-  dueThisWeek?: boolean;
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks that are due this month',
-    example: true,
-  })
-  @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
-  dueThisMonth?: boolean;
 } 

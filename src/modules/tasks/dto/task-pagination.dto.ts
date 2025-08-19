@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsInt, Min, Max, IsEnum, IsString } from 'class-validator';
-import { Type, Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 import { PaginationOptions } from '../../../types/pagination.interface';
 
 export class TaskPaginationDto implements PaginationOptions {
@@ -35,7 +35,6 @@ export class TaskPaginationDto implements PaginationOptions {
   })
   @IsOptional()
   @IsString()
-  @IsEnum(['id', 'title', 'status', 'priority', 'dueDate', 'createdAt', 'updatedAt'])
   sortBy?: string = 'createdAt';
 
   @ApiPropertyOptional({
@@ -46,20 +45,4 @@ export class TaskPaginationDto implements PaginationOptions {
   @IsOptional()
   @IsEnum(['ASC', 'DESC'])
   sortOrder?: 'ASC' | 'DESC' = 'DESC';
-
-  @ApiPropertyOptional({
-    description: 'Include user information in the response',
-    example: true,
-  })
-  @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
-  includeUser?: boolean = true;
-
-  @ApiPropertyOptional({
-    description: 'Include task statistics in the response',
-    example: false,
-  })
-  @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
-  includeStats?: boolean = false;
 }
