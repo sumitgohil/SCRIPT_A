@@ -5,6 +5,8 @@ import { TasksService } from './tasks.service';
 import { TasksController } from './tasks.controller';
 import { Task } from './entities/task.entity';
 import { AuthModule } from '../auth/auth.module';
+import { TasksCqrsModule } from './tasks-cqrs.module';
+import { TaskDomainService } from './domain/task-domain.service';
 
 @Module({
   imports: [
@@ -13,9 +15,10 @@ import { AuthModule } from '../auth/auth.module';
       name: 'task-processing',
     }),
     AuthModule,
+    TasksCqrsModule,
   ],
   controllers: [TasksController],
-  providers: [TasksService],
-  exports: [TasksService, TypeOrmModule],
+  providers: [TasksService, TaskDomainService],
+  exports: [TasksService, TypeOrmModule, TaskDomainService],
 })
 export class TasksModule {} 

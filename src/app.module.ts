@@ -11,6 +11,7 @@ import { ScheduledTasksModule } from './queues/scheduled-tasks/scheduled-tasks.m
 import { CacheService } from './common/services/cache.service';
 import { RateLimitingModule } from './common/rate-limiting/rate-limiting.module';
 import { HealthModule } from './health/health.module';
+import { AdvancedPatternsModule } from './common/advanced-patterns/advanced-patterns.module';
 
 @Module({
   imports: [
@@ -65,6 +66,9 @@ import { HealthModule } from './health/health.module';
     
     // Health monitoring
     HealthModule,
+    
+    // Advanced patterns
+    AdvancedPatternsModule,
   ],
   providers: [
     // Inefficient: Global cache service with no configuration options
