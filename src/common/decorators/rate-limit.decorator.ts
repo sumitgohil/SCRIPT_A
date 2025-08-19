@@ -5,10 +5,10 @@ export const RATE_LIMIT_KEY = 'rate_limit';
 export interface RateLimitOptions {
   limit: number;
   windowMs: number;
+  keyPrefix?: string;
 }
 
 export const RateLimit = (options: RateLimitOptions) => {
-  // Problem: This decorator doesn't actually enforce rate limiting
-  // It only sets metadata that is never used by the guard
+  // Now properly sets metadata that will be used by the RedisRateLimitGuard
   return SetMetadata(RATE_LIMIT_KEY, options);
 }; 

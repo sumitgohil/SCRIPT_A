@@ -17,7 +17,7 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskQueryDto } from './dto/task-query.dto';
 import { Task } from './entities/task.entity';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags, ApiResponse } from '@nestjs/swagger';
-import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
+import { RedisRateLimitGuard } from '../../common/guards/redis-rate-limit.guard';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -27,7 +27,7 @@ import { PaginatedResponse } from '../../types/pagination.interface';
 
 @ApiTags('tasks')
 @Controller('tasks')
-@UseGuards(JwtAuthGuard, RateLimitGuard)
+@UseGuards(JwtAuthGuard, RedisRateLimitGuard)
 @RateLimit({ limit: 100, windowMs: 60000 })
 @ApiBearerAuth()
 export class TasksController {
