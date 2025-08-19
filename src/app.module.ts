@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { UsersModule } from './modules/users/users.module';
 import { TasksModule } from './modules/tasks/tasks.module';
@@ -10,6 +9,9 @@ import { AuthModule } from './modules/auth/auth.module';
 import { TaskProcessorModule } from './queues/task-processor/task-processor.module';
 import { ScheduledTasksModule } from './queues/scheduled-tasks/scheduled-tasks.module';
 import { CacheService } from './common/services/cache.service';
+import { RateLimitingModule } from './common/rate-limiting/rate-limiting.module';
+import { HealthModule } from './health/health.module';
+import { AdvancedPatternsModule } from './common/advanced-patterns/advanced-patterns.module';
 
 @Module({
   imports: [
@@ -51,16 +53,7 @@ import { CacheService } from './common/services/cache.service';
     }),
     
     // Rate limiting
-    ThrottlerModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ([
-        {
-          ttl: 60,
-          limit: 10,
-        },
-      ]),
-    }),
+    RateLimitingModule,
     
     // Feature modules
     UsersModule,
@@ -70,11 +63,17 @@ import { CacheService } from './common/services/cache.service';
     // Queue processing modules
     TaskProcessorModule,
     ScheduledTasksModule,
+    
+    // Health monitoring
+    HealthModule,
+    
+    // Advanced patterns
+    AdvancedPatternsModule,
   ],
   providers: [
     // Inefficient: Global cache service with no configuration options
     // This creates a single in-memory cache instance shared across all modules
-    CacheService
+    CacheService,
   ],
   exports: [
     // Exporting the cache service makes it available to other modules

@@ -1,5 +1,17 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsEnum, IsUUID, IsDateString, IsInt, Min, Max, IsArray, ValidateNested } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsOptional,
+  IsString,
+  IsEnum,
+  IsUUID,
+  IsDateString,
+  IsInt,
+  Min,
+  Max,
+  IsArray,
+  ValidateNested,
+  IsBoolean,
+} from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { TaskStatus } from '../enums/task-status.enum';
 import { TaskPriority } from '../enums/task-priority.enum';
@@ -22,7 +34,8 @@ export class DateRangeDto {
   endDate?: string;
 }
 
-export class TaskFilterDto {
+export class TaskQueryDto {
+  // Filter properties
   @ApiPropertyOptional({
     description: 'Filter tasks by status',
     enum: TaskStatus,
@@ -56,33 +69,6 @@ export class TaskFilterDto {
   @IsOptional()
   @IsString()
   search?: string;
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks by due date range',
-    type: DateRangeDto,
-  })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => DateRangeDto)
-  dueDateRange?: DateRangeDto;
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks by creation date range',
-    type: DateRangeDto,
-  })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => DateRangeDto)
-  createdAtRange?: DateRangeDto;
-
-  @ApiPropertyOptional({
-    description: 'Filter tasks by completion date range',
-    type: DateRangeDto,
-  })
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => DateRangeDto)
-  completedAtRange?: DateRangeDto;
 
   @ApiPropertyOptional({
     description: 'Filter tasks by multiple statuses',
@@ -120,6 +106,7 @@ export class TaskFilterDto {
   })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
   overdue?: boolean;
 
   @ApiPropertyOptional({
@@ -128,6 +115,7 @@ export class TaskFilterDto {
   })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
   dueToday?: boolean;
 
   @ApiPropertyOptional({
@@ -136,6 +124,7 @@ export class TaskFilterDto {
   })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
   dueThisWeek?: boolean;
 
   @ApiPropertyOptional({
@@ -144,5 +133,68 @@ export class TaskFilterDto {
   })
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
   dueThisMonth?: boolean;
-} 
+
+  // Pagination properties
+  @ApiPropertyOptional({
+    description: 'Page number for pagination (starts from 1)',
+    example: 1,
+    minimum: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({
+    description: 'Number of items per page',
+    example: 10,
+    minimum: 1,
+    maximum: 100,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 10;
+
+  @ApiPropertyOptional({
+    description: 'Field to sort by',
+    example: 'createdAt',
+    enum: ['id', 'title', 'status', 'priority', 'dueDate', 'createdAt', 'updatedAt'],
+  })
+  @IsOptional()
+  @IsString()
+  @IsEnum(['id', 'title', 'status', 'priority', 'dueDate', 'createdAt', 'updatedAt'])
+  sortBy?: string = 'createdAt';
+
+  @ApiPropertyOptional({
+    description: 'Sort order (ascending or descending)',
+    example: 'DESC',
+    enum: ['ASC', 'DESC'],
+  })
+  @IsOptional()
+  @IsEnum(['ASC', 'DESC'])
+  sortOrder?: 'ASC' | 'DESC' = 'DESC';
+
+  @ApiPropertyOptional({
+    description: 'Include user information in the response',
+    example: true,
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  includeUser?: boolean = true;
+
+  @ApiPropertyOptional({
+    description: 'Include task statistics in the response',
+    example: false,
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  includeStats?: boolean = false;
+}
