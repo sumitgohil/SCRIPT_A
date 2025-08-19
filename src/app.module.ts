@@ -10,6 +10,7 @@ import { TaskProcessorModule } from './queues/task-processor/task-processor.modu
 import { ScheduledTasksModule } from './queues/scheduled-tasks/scheduled-tasks.module';
 import { CacheService } from './common/services/cache.service';
 import { RateLimitingModule } from './common/rate-limiting/rate-limiting.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -61,6 +62,9 @@ import { RateLimitingModule } from './common/rate-limiting/rate-limiting.module'
     // Queue processing modules
     TaskProcessorModule,
     ScheduledTasksModule,
+    
+    // Health monitoring
+    HealthModule,
   ],
   providers: [
     // Inefficient: Global cache service with no configuration options

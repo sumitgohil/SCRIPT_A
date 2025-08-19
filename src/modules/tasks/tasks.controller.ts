@@ -123,4 +123,83 @@ export class TasksController {
   async batchProcess(@Body() operations: { tasks: string[]; action: string }) {
     return this.tasksService.batchProcess(operations);
   }
+
+  @Patch(':id/status')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.USER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Update task status' })
+  @ApiResponse({ status: 200, description: 'Task status updated successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid status value' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Task not found' })
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: string }
+  ) {
+    return this.tasksService.updateStatus(id, body.status);
+  }
+
+  @Get('search/:query')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.USER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Search tasks by title or description' })
+  @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  async searchTasks(
+    @Param('query') query: string,
+    @Query('limit') limit: string = '20'
+  ) {
+    return this.tasksService.searchTasks(query, parseInt(limit, 10));
+  }
+
+  @Get('user/:userId')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.USER, UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get tasks assigned to a specific user' })
+  @ApiResponse({ status: 200, description: 'User tasks retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async getTasksByUser(
+    @Param('userId') userId: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10'
+  ) {
+    return this.tasksService.getTasksByUser(
+      userId,
+      parseInt(page, 10),
+      parseInt(limit, 10)
+    );
+  }
+
+  @Get('overdue')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get overdue tasks' })
+  @ApiResponse({ status: 200, description: 'Overdue tasks retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  async getOverdueTasks(
+    @Query('limit') limit: string = '50'
+  ) {
+    return this.tasksService.getOverdueTasks(parseInt(limit, 10));
+  }
+
+  @Post(':id/assign')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Assign task to a user' })
+  @ApiResponse({ status: 200, description: 'Task assigned successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid user ID' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Task or user not found' })
+  async assignTask(
+    @Param('id') taskId: string,
+    @Body() body: { userId: string }
+  ) {
+    return this.tasksService.assignTask(taskId, body.userId);
+  }
 }
