@@ -22,4 +22,4 @@ import { RolesGuard } from '../../common/guards/roles.guard';
   providers: [TasksService, TaskDomainService, RolesGuard],
   exports: [TasksService, TypeOrmModule, TaskDomainService],
 })
-export class TasksModule {} 
+export class TasksModule {}
