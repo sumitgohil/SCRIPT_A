@@ -4,6 +4,7 @@ import { User } from '../../modules/users/entities/user.entity';
 import { Task } from '../../modules/tasks/entities/task.entity';
 import { users } from './seed-data/users.seed';
 import { tasks } from './seed-data/tasks.seed';
+import { bulkSeed } from './bulk-seed';
 
 // Load environment variables
 config();
@@ -23,6 +24,9 @@ const AppDataSource = new DataSource({
 // Initialize and seed database
 async function main() {
   try {
+    // Check command line arguments
+    const isBulkSeed = process.argv.includes('--bulk');
+    
     // Initialize connection
     await AppDataSource.initialize();
     console.log('Database connection initialized');
@@ -32,13 +36,19 @@ async function main() {
     await AppDataSource.getRepository(User).delete({});
     console.log('Existing data cleared');
 
-    // Seed users
-    await AppDataSource.getRepository(User).save(users);
-    console.log('Users seeded successfully');
+    if (isBulkSeed) {
+      console.log('🚀 Running bulk seeding...');
+      await bulkSeed(AppDataSource);
+    } else {
+      console.log('🌱 Running basic seeding...');
+      // Seed users
+      await AppDataSource.getRepository(User).save(users);
+      console.log('Users seeded successfully');
 
-    // Seed tasks
-    await AppDataSource.getRepository(Task).save(tasks);
-    console.log('Tasks seeded successfully');
+      // Seed tasks
+      await AppDataSource.getRepository(Task).save(tasks);
+      console.log('Tasks seeded successfully');
+    }
 
     console.log('Database seeding completed');
   } catch (error) {

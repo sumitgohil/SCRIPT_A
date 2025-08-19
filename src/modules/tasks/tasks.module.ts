@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bullmq';
 import { TasksService } from './tasks.service';
@@ -7,6 +7,7 @@ import { Task } from './entities/task.entity';
 import { AuthModule } from '../auth/auth.module';
 import { TasksCqrsModule } from './tasks-cqrs.module';
 import { TaskDomainService } from './domain/task-domain.service';
+import { RolesGuard } from '../../common/guards/roles.guard';
 
 @Module({
   imports: [
@@ -14,11 +15,11 @@ import { TaskDomainService } from './domain/task-domain.service';
     BullModule.registerQueue({
       name: 'task-processing',
     }),
-    AuthModule,
+    forwardRef(() => AuthModule),
     TasksCqrsModule,
   ],
   controllers: [TasksController],
-  providers: [TasksService, TaskDomainService],
+  providers: [TasksService, TaskDomainService, RolesGuard],
   exports: [TasksService, TypeOrmModule, TaskDomainService],
 })
 export class TasksModule {} 
