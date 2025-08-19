@@ -20,18 +20,34 @@ export class TasksService {
   ) {}
 
   async create(createTaskDto: CreateTaskDto): Promise<Task> {
-    // Inefficient implementation: creates the task but doesn't use a single transaction
-    // for creating and adding to queue, potential for inconsistent state
-    const task = this.tasksRepository.create(createTaskDto);
-    const savedTask = await this.tasksRepository.save(task);
+    // Optimized: proper transaction handling for task creation and queue addition
+    const queryRunner = this.tasksRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // Add to queue without waiting for confirmation or handling errors
-    this.taskQueue.add('task-status-update', {
-      taskId: savedTask.id,
-      status: savedTask.status,
-    });
+    try {
+      const task = this.tasksRepository.create(createTaskDto);
+      const savedTask = await queryRunner.manager.save(Task, task);
 
-    return savedTask;
+      // Add to queue with proper error handling
+      try {
+        await this.taskQueue.add('task-status-update', {
+          taskId: savedTask.id,
+          status: savedTask.status,
+        });
+      } catch (queueError) {
+        // Log queue error but don't fail the task creation
+        console.error('Failed to add task to queue:', queueError);
+      }
+
+      await queryRunner.commitTransaction();
+      return savedTask;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async findAll(): Promise<Task[]> {
@@ -210,56 +226,98 @@ export class TasksService {
   }
 
   async findOne(id: string): Promise<Task> {
-    // Inefficient implementation: two separate database calls
-    const count = await this.tasksRepository.count({ where: { id } });
+    // Optimized: single database call with proper error handling
+    const task = await this.tasksRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
 
-    if (count === 0) {
+    if (!task) {
       throw new NotFoundException(`Task with ID ${id} not found`);
     }
 
-    return (await this.tasksRepository.findOne({
-      where: { id },
-      relations: ['user'],
-    })) as Task;
+    return task;
   }
 
   async update(id: string, updateTaskDto: UpdateTaskDto): Promise<Task> {
-    // Inefficient implementation: multiple database calls
-    // and no transaction handling
-    const task = await this.findOne(id);
+    // Optimized: single database call with proper transaction handling
+    const queryRunner = this.tasksRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const originalStatus = task.status;
-
-    // Directly update each field individually
-    if (updateTaskDto.title) task.title = updateTaskDto.title;
-    if (updateTaskDto.description) task.description = updateTaskDto.description;
-    if (updateTaskDto.status) task.status = updateTaskDto.status;
-    if (updateTaskDto.priority) task.priority = updateTaskDto.priority;
-    if (updateTaskDto.dueDate) task.dueDate = updateTaskDto.dueDate;
-
-    const updatedTask = await this.tasksRepository.save(task);
-
-    // Add to queue if status changed, but without proper error handling
-    if (originalStatus !== updatedTask.status) {
-      this.taskQueue.add('task-status-update', {
-        taskId: updatedTask.id,
-        status: updatedTask.status,
+    try {
+      const task = await queryRunner.manager.findOne(Task, {
+        where: { id },
+        relations: ['user'],
       });
-    }
 
-    return updatedTask;
+      if (!task) {
+        throw new NotFoundException(`Task with ID ${id} not found`);
+      }
+
+      const originalStatus = task.status;
+
+      // Update only the fields that are provided
+      Object.assign(task, updateTaskDto);
+      task.updatedAt = new Date();
+
+      const updatedTask = await queryRunner.manager.save(Task, task);
+
+      // Add to queue if status changed with proper error handling
+      if (originalStatus !== updatedTask.status) {
+        try {
+          await this.taskQueue.add('task-status-update', {
+            taskId: updatedTask.id,
+            status: updatedTask.status,
+          });
+        } catch (queueError) {
+          // Log queue error but don't fail the update
+          console.error('Failed to add task to queue:', queueError);
+        }
+      }
+
+      await queryRunner.commitTransaction();
+      return updatedTask;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async remove(id: string): Promise<void> {
-    // Inefficient implementation: two separate database calls
-    const task = await this.findOne(id);
-    await this.tasksRepository.remove(task);
+    // Optimized: single database call with proper transaction handling
+    const queryRunner = this.tasksRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const task = await queryRunner.manager.findOne(Task, {
+        where: { id },
+      });
+
+      if (!task) {
+        throw new NotFoundException(`Task with ID ${id} not found`);
+      }
+
+      await queryRunner.manager.remove(Task, task);
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   async findByStatus(status: TaskStatus): Promise<Task[]> {
-    // Inefficient implementation: doesn't use proper repository patterns
-    const query = 'SELECT * FROM tasks WHERE status = $1';
-    return this.tasksRepository.query(query, [status]);
+    // Optimized: using proper repository patterns with TypeORM
+    return this.tasksRepository.find({
+      where: { status },
+      relations: ['user'],
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async updateStatus(id: string, status: string): Promise<Task> {
@@ -284,36 +342,46 @@ export class TasksService {
     await queryRunner.startTransaction();
 
     try {
-      for (const taskId of taskIds) {
-        try {
-          let result;
+      // Optimized: Use bulk operations instead of sequential processing
+      switch (action) {
+        case 'complete':
+          const updateResult = await queryRunner.manager
+            .createQueryBuilder()
+            .update(Task)
+            .set({
+              status: TaskStatus.COMPLETED,
+              updatedAt: new Date(),
+            })
+            .whereInIds(taskIds)
+            .execute();
+          
+          results.push({ action: 'complete', success: true, affectedRows: updateResult.affected });
+          break;
 
-          switch (action) {
-            case 'complete':
-              result = await queryRunner.manager.update(Task, taskId, {
-                status: TaskStatus.COMPLETED,
-                updatedAt: new Date(),
-              });
-              break;
-            case 'delete':
-              result = await queryRunner.manager.delete(Task, taskId);
-              break;
-            case 'archive':
-              result = await queryRunner.manager.update(Task, taskId, {
-                status: TaskStatus.ARCHIVED,
-                updatedAt: new Date(),
-              });
-              break;
-          }
+        case 'delete':
+          const deleteResult = await queryRunner.manager
+            .createQueryBuilder()
+            .delete()
+            .from(Task)
+            .whereInIds(taskIds)
+            .execute();
+          
+          results.push({ action: 'delete', success: true, affectedRows: deleteResult.affected });
+          break;
 
-          results.push({ taskId, success: true, result });
-        } catch (error) {
-          results.push({
-            taskId,
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          });
-        }
+        case 'archive':
+          const archiveResult = await queryRunner.manager
+            .createQueryBuilder()
+            .update(Task)
+            .set({
+              status: TaskStatus.ARCHIVED,
+              updatedAt: new Date(),
+            })
+            .whereInIds(taskIds)
+            .execute();
+          
+          results.push({ action: 'archive', success: true, affectedRows: archiveResult.affected });
+          break;
       }
 
       await queryRunner.commitTransaction();

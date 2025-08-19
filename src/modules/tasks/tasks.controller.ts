@@ -15,10 +15,8 @@ import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskQueryDto } from './dto/task-query.dto';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags, ApiResponse } from '@nestjs/swagger';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { Task } from './entities/task.entity';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags, ApiResponse } from '@nestjs/swagger';
 import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -35,9 +33,6 @@ import { PaginatedResponse } from '../../types/pagination.interface';
 export class TasksController {
   constructor(
     private readonly tasksService: TasksService,
-    // Anti-pattern: Controller directly accessing repository
-    @InjectRepository(Task)
-    private taskRepository: Repository<Task>,
   ) {}
 
   @Post()
